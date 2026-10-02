@@ -1,0 +1,751 @@
+<title>Sound Safari</title>
+<style>
+/* Layout concept: one full-height "stage" card centered on a warm sandy ground, a progress trail
+   of dots across the top, and a single big circular action button that is either "listen" or
+   "record" depending on state — minimising reading and choice for a 3-5 year old. */
+:root{
+  --bg:#FFF6E6;
+  --surface:#FFFFFF;
+  --ink:#2B3A36;
+  --mute:#8A9A93;
+  --accent:#2E8B74;
+  --accent-ink:#F4FFF9;
+  --coral:#FF6F59;
+  --gold:#FFC94A;
+  --line:#EADFC4;
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Nunito',system-ui,sans-serif;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  touch-action:manipulation;
+}
+h1,h2,.display{font-family:'Baloo 2',system-ui,sans-serif;}
+
+/* ---------- top bar ---------- */
+#topbar{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  padding-top:calc(10px + env(safe-area-inset-top,0px));
+}
+#trail{
+  flex:1;
+  min-width:0;
+  display:flex;
+  gap:5px;
+  overflow-x:auto;
+  padding:4px 2px;
+  scrollbar-width:none;
+}
+#trail::-webkit-scrollbar{display:none;}
+.dot{
+  flex:0 0 auto;
+  width:14px;height:14px;border-radius:50%;
+  background:var(--line);
+  border:2px solid var(--line);
+}
+.dot.done{background:var(--accent);border-color:var(--accent);}
+.dot.current{background:var(--gold);border-color:var(--gold);width:18px;height:18px;}
+.dot.word{border-radius:4px;}
+#stars{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  font-weight:800;
+  font-size:15px;
+  color:#B8860B;
+  background:var(--surface);
+  border-radius:999px;
+  padding:6px 12px;
+  box-shadow:0 1px 0 var(--line);
+}
+#gear{
+  flex:0 0 auto;
+  width:34px;height:34px;
+  border-radius:50%;
+  border:none;
+  background:var(--surface);
+  color:var(--mute);
+  font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 0 var(--line);
+  cursor:pointer;
+}
+
+/* ---------- stage ---------- */
+#stage{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:10px 20px calc(16px + env(safe-area-inset-bottom,0px));
+  gap:18px;
+  min-height:0;
+}
+#card{
+  width:min(380px,100%);
+  background:var(--surface);
+  border-radius:28px;
+  padding:26px 20px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  box-shadow:0 10px 0 var(--line);
+  position:relative;
+}
+#kindTag{
+  position:absolute;
+  top:14px; left:18px;
+  font-size:12px;
+  letter-spacing:.08em;
+  font-weight:800;
+  color:var(--mute);
+  text-transform:uppercase;
+}
+#emoji{
+  font-size:88px;
+  line-height:1;
+  filter:drop-shadow(0 4px 0 rgba(0,0,0,.05));
+}
+#targetText{
+  font-size:56px;
+  font-weight:800;
+  color:var(--accent);
+  letter-spacing:.02em;
+}
+#subWord{
+  font-size:18px;
+  color:var(--mute);
+  font-weight:700;
+}
+#listenBtn{
+  margin-top:4px;
+  border:none;
+  background:var(--bg);
+  color:var(--accent);
+  font-weight:800;
+  font-size:15px;
+  padding:9px 18px;
+  border-radius:999px;
+  display:flex;align-items:center;gap:7px;
+  cursor:pointer;
+}
+#listenBtn:active{transform:scale(.96);}
+
+#feedback{
+  min-height:30px;
+  text-align:center;
+  font-weight:800;
+  font-size:17px;
+  color:var(--accent);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+#feedback.bad{color:var(--coral);}
+
+#micWrap{display:flex;flex-direction:column;align-items:center;gap:10px;}
+#micBtn{
+  width:112px;height:112px;
+  border-radius:50%;
+  border:none;
+  background:var(--coral);
+  color:#fff;
+  font-size:44px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 0 #D9573F;
+  cursor:pointer;
+  transition:transform .08s ease;
+}
+#micBtn:active{transform:translateY(4px);box-shadow:0 4px 0 #D9573F;}
+#micBtn.listening{
+  background:var(--gold);
+  box-shadow:0 8px 0 #D9A017;
+  animation:pulse 1s ease-in-out infinite;
+}
+#micBtn[disabled]{opacity:.5;cursor:default;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+#micLabel{font-size:13px;font-weight:800;color:var(--mute);}
+
+#nextBtn{
+  border:none;
+  background:var(--accent);
+  color:var(--accent-ink);
+  font-weight:800;
+  font-size:16px;
+  padding:12px 26px;
+  border-radius:999px;
+  box-shadow:0 5px 0 #1F6B59;
+  cursor:pointer;
+  visibility:hidden;
+}
+#nextBtn.show{visibility:visible;}
+#nextBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #1F6B59;}
+
+/* ---------- confetti ---------- */
+.confetti{
+  position:fixed;
+  top:-10px;
+  width:10px;height:14px;
+  border-radius:2px;
+  pointer-events:none;
+  animation:fall linear forwards;
+  z-index:30;
+}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg);opacity:.2;}}
+
+/* ---------- gate / settings overlay ---------- */
+.overlay{
+  position:fixed; inset:0;
+  background:rgba(43,58,54,.55);
+  display:flex;align-items:center;justify-content:center;
+  padding:20px;
+  z-index:40;
+}
+.overlay[hidden]{display:none;}
+.panel{
+  width:min(420px,100%);
+  max-height:90vh;
+  overflow-y:auto;
+  background:var(--surface);
+  border-radius:22px;
+  padding:24px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.panel h2{margin:0;font-size:22px;color:var(--ink);}
+.panel p{margin:0;font-size:14px;line-height:1.5;color:var(--mute);}
+.panel label{font-size:13px;font-weight:800;color:var(--ink);display:block;margin-bottom:4px;}
+.panel input,.panel select{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  font-size:15px;
+  font-family:inherit;
+  background:var(--bg);
+  color:var(--ink);
+}
+.row{display:flex;flex-direction:column;gap:4px;}
+.btnRow{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;}
+.btn{
+  border:none;border-radius:999px;
+  padding:11px 20px;
+  font-weight:800;font-size:14px;
+  cursor:pointer;
+}
+.btn.primary{background:var(--accent);color:var(--accent-ink);}
+.btn.ghost{background:var(--bg);color:var(--ink);}
+.btn.danger{background:#FDEAE6;color:var(--coral);}
+.statGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.statBox{background:var(--bg);border-radius:14px;padding:12px;text-align:center;}
+.statBox b{display:block;font-size:22px;color:var(--accent);font-family:'Baloo 2';}
+.statBox span{font-size:12px;color:var(--mute);font-weight:700;}
+a.link{color:var(--accent);font-weight:700;word-break:break-all;}
+.small{font-size:12px;color:var(--mute);}
+hr{border:none;border-top:1px solid var(--line);margin:4px 0;}
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+
+<div id="topbar">
+  <div id="trail"></div>
+  <div id="stars">⭐ <span id="starCount">0</span></div>
+  <button id="gear" aria-label="Grown-up settings">⚙️</button>
+</div>
+
+<div id="stage">
+  <div id="card">
+    <div id="kindTag">Sound</div>
+    <div id="emoji">🦉</div>
+    <div id="targetText">—</div>
+    <div id="subWord"></div>
+    <button id="listenBtn">🔊 Listen again</button>
+  </div>
+
+  <div id="feedback"></div>
+
+  <div id="micWrap">
+    <button id="micBtn" disabled>🎤</button>
+    <div id="micLabel">Tap the ears to speak</div>
+  </div>
+
+  <button id="nextBtn">Next →</button>
+</div>
+
+<!-- Setup / settings overlay -->
+<div class="overlay" id="setupOverlay">
+  <div class="panel">
+    <h2>Grown-up setup</h2>
+    <p>Sound Safari listens through <b>your own</b> Azure Speech resource, so a child's voice only
+       ever goes to an account you control — never stored by Claude, never shared.</p>
+    <div class="row">
+      <label for="keyInput">Azure Speech key</label>
+      <input id="keyInput" type="text" placeholder="Paste your key here" autocomplete="off">
+    </div>
+    <div class="row">
+      <label for="regionInput">Azure region</label>
+      <select id="regionInput">
+        <option value="uksouth">UK South</option>
+        <option value="ukwest">UK West</option>
+        <option value="westeurope">West Europe</option>
+        <option value="northeurope">North Europe</option>
+        <option value="eastus">East US</option>
+        <option value="eastus2">East US 2</option>
+        <option value="westus">West US</option>
+        <option value="centralus">Central US</option>
+        <option value="southeastasia">Southeast Asia</option>
+        <option value="australiaeast">Australia East</option>
+      </select>
+    </div>
+    <p class="small">Get these from <a class="link" href="https://portal.azure.com" >portal.azure.com</a> →
+       your Speech resource → <b>Keys and Endpoint</b>. The free tier is plenty for home use.</p>
+    <div class="btnRow">
+      <button class="btn primary" id="saveKeyBtn">Save &amp; start</button>
+      <button class="btn ghost" id="closeSetupBtn" hidden>Close</button>
+    </div>
+    <div id="setupMsg" class="small"></div>
+  </div>
+</div>
+
+<!-- Stats / settings overlay -->
+<div class="overlay" id="statsOverlay" hidden>
+  <div class="panel">
+    <h2>Grown-up corner</h2>
+    <div class="statGrid">
+      <div class="statBox"><b id="statMastered">0</b><span>sounds &amp; words learned</span></div>
+      <div class="statBox"><b id="statStars">0</b><span>stars earned</span></div>
+    </div>
+    <hr>
+    <p class="small">Sound Safari follows the common UK "Letters and Sounds" order: single letter
+       sounds first (Phase 2, then Phase 3 digraphs), with simple CVC word-blending mixed in once
+       enough letters are known — the same pathway most UK schools use.</p>
+    <hr>
+    <div class="row">
+      <label for="keyInput2">Azure Speech key</label>
+      <input id="keyInput2" type="text" placeholder="Paste your key here" autocomplete="off">
+    </div>
+    <div class="row">
+      <label for="regionInput2">Azure region</label>
+      <select id="regionInput2"></select>
+    </div>
+    <div class="btnRow">
+      <button class="btn primary" id="updateKeyBtn">Update</button>
+    </div>
+    <div id="statsMsg" class="small"></div>
+    <hr>
+    <div class="btnRow">
+      <button class="btn danger" id="resetBtn">Reset progress</button>
+      <button class="btn ghost" id="closeStatsBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@1.52.0/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ---------------- content: Letters & Sounds order ---------------- */
+var SOUNDS = [
+  {ph:'s',word:'sun',emoji:'☀️'},{ph:'a',word:'ant',emoji:'🐜'},{ph:'t',word:'tap',emoji:'🚰'},{ph:'p',word:'pig',emoji:'🐷'},
+  {ph:'i',word:'insect',emoji:'🐛'},{ph:'n',word:'net',emoji:'🥅'},{ph:'m',word:'map',emoji:'🗺️'},{ph:'d',word:'dog',emoji:'🐶'},
+  {ph:'g',word:'goat',emoji:'🐐'},{ph:'o',word:'octopus',emoji:'🐙'},{ph:'c',word:'cat',emoji:'🐱'},{ph:'k',word:'kite',emoji:'🪁'},
+  {ph:'ck',word:'duck',emoji:'🦆'},{ph:'e',word:'egg',emoji:'🥚'},{ph:'u',word:'umbrella',emoji:'☂️'},{ph:'r',word:'rabbit',emoji:'🐰'},
+  {ph:'h',word:'hat',emoji:'🎩'},{ph:'b',word:'bus',emoji:'🚌'},{ph:'f',word:'fish',emoji:'🐟'},{ph:'ff',word:'puff',emoji:'💨'},
+  {ph:'l',word:'lion',emoji:'🦁'},{ph:'ll',word:'bell',emoji:'🔔'},{ph:'ss',word:'hiss',emoji:'🐍'},
+  {ph:'j',word:'jug',emoji:'🫙'},{ph:'v',word:'van',emoji:'🚐'},{ph:'w',word:'web',emoji:'🕸️'},{ph:'x',word:'fox',emoji:'🦊'},
+  {ph:'y',word:'yoyo',emoji:'🪀'},{ph:'z',word:'zebra',emoji:'🦓'},{ph:'zz',word:'buzz',emoji:'🐝'},{ph:'qu',word:'queen',emoji:'👸'},
+  {ph:'ch',word:'chip',emoji:'🍟'},{ph:'sh',word:'ship',emoji:'🚢'},{ph:'th',word:'thumb',emoji:'👍'},{ph:'ng',word:'ring',emoji:'💍'},
+  {ph:'ai',word:'rain',emoji:'🌧️'},{ph:'ee',word:'bee',emoji:'🐝'},{ph:'igh',word:'night',emoji:'🌙'},{ph:'oa',word:'boat',emoji:'🚤'},
+  {ph:'oo',word:'moon',emoji:'🌕'},{ph:'oo',word:'book',emoji:'📖'},{ph:'ar',word:'car',emoji:'🚗'},{ph:'or',word:'fork',emoji:'🍴'},
+  {ph:'ur',word:'nurse',emoji:'👩‍⚕️'},{ph:'ow',word:'cow',emoji:'🐄'},{ph:'oi',word:'coin',emoji:'🪙'},{ph:'ear',word:'ear',emoji:'👂'},
+  {ph:'air',word:'chair',emoji:'🪑'}
+];
+
+// CVC / simple blending words, placed as checkpoints once their letters are known.
+var WORDS_AFTER = {
+  4:['sat','tap','pat'],
+  8:['pin','nap','man','dad','sit'],
+  12:['cat','dog','cot','cap'],
+  16:['duck','red','run'],
+  23:['hat','bus','fan','bell','hiss','leg'],
+  27:['fox','web','van'],
+  31:['queen','zebra'],
+  35:['ship','chip','ring','thumb','buzz'],
+  41:['rain','night','boat','moon'],
+  47:['car','fork','cow','coin'],
+  48:['chair']
+};
+var WORD_EMOJI = {sat:'🪑',tap:'🚰',pat:'✋',pin:'📌',nap:'😴',man:'🧑',dad:'👨',sit:'🧎',cat:'🐱',dog:'🐶',cot:'🛏️',cap:'🧢',
+  duck:'🦆',red:'🔴',run:'🏃',hat:'🎩',bus:'🚌',fan:'🪭',bell:'🔔',hiss:'🐍',leg:'🦵',fox:'🦊',web:'🕸️',van:'🚐',
+  ship:'🚢',chip:'🍟',queen:'👸',zebra:'🦓',ring:'💍',thumb:'👍',buzz:'🐝',rain:'🌧️',night:'🌙',boat:'🚤',moon:'🌕',
+  car:'🚗',fork:'🍴',cow:'🐄',coin:'🪙',chair:'🪑'};
+
+// Build the master sequence: sound, sound, ... [checkpoint words] ...
+var ITEMS = [];
+SOUNDS.forEach(function(s,i){
+  ITEMS.push({type:'sound',id:'s'+i,ph:s.ph,word:s.word,emoji:s.emoji});
+  var idx1 = i+1;
+  if(WORDS_AFTER[idx1]){
+    WORDS_AFTER[idx1].forEach(function(w){
+      ITEMS.push({type:'word',id:'w'+w,word:w,emoji:WORD_EMOJI[w]||'⭐'});
+    });
+  }
+});
+
+var PASS_SCORE = 60;
+var MAX_TRIES = 3;
+var NEEDED_PASSES = 2;
+
+/* ---------------- progress storage ---------------- */
+var STORE_KEY = 'soundSafariProgress_v1';
+var CFG_KEY = 'soundSafariConfig_v1';
+
+function loadJSON(key, fallback){
+  try{
+    var raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  }catch(e){ return fallback; }
+}
+function saveJSON(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+}
+
+var progress = loadJSON(STORE_KEY, {passes:{}, tries:{}, stars:0, index:0});
+var config = loadJSON(CFG_KEY, {key:'', region:'uksouth'});
+
+function persist(){ saveJSON(STORE_KEY, progress); }
+
+/* ---------------- DOM ---------------- */
+var $ = function(id){ return document.getElementById(id); };
+var trail = $('trail'), starCount = $('starCount'), kindTag = $('kindTag'),
+    emojiEl = $('emoji'), targetText = $('targetText'), subWord = $('subWord'),
+    listenBtn = $('listenBtn'), micBtn = $('micBtn'), micLabel = $('micLabel'),
+    feedback = $('feedback'), nextBtn = $('nextBtn');
+
+function buildTrail(){
+  trail.innerHTML='';
+  ITEMS.forEach(function(item,i){
+    var d = document.createElement('div');
+    d.className = 'dot' + (item.type==='word' ? ' word' : '');
+    if((progress.passes[item.id]||0) >= NEEDED_PASSES) d.className += ' done';
+    if(i===progress.index) d.className += ' current';
+    trail.appendChild(d);
+  });
+}
+
+function currentItem(){ return ITEMS[Math.min(progress.index, ITEMS.length-1)]; }
+
+function renderCard(){
+  var item = currentItem();
+  kindTag.textContent = item.type==='word' ? 'Word' : 'Letter sound';
+  emojiEl.textContent = item.emoji;
+  if(item.type==='word'){
+    targetText.textContent = item.word;
+    subWord.textContent = 'Sound it out and say the word';
+  }else{
+    targetText.textContent = item.ph;
+    subWord.textContent = 'says "'+item.ph+'" like in '+item.word;
+  }
+  starCount.textContent = progress.stars;
+  feedback.textContent = '';
+  feedback.className = '';
+  nextBtn.classList.remove('show');
+  buildTrail();
+  // scroll current dot into view
+  var curDot = trail.children[progress.index];
+  if(curDot) curDot.scrollIntoView({inline:'center', block:'nearest'});
+}
+
+function speakPrompt(){
+  var item = currentItem();
+  var phrase = item.type==='word' ? item.word : (item.word);
+  speak(item.type==='word' ? ('Can you say '+item.word+'?') : ('This says '+item.ph+', like in '+item.word+'. Can you say '+item.word+'?'));
+}
+
+function speak(text){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-GB';
+    var voices = window.speechSynthesis.getVoices();
+    var gb = voices.find(function(v){return v.lang==='en-GB';});
+    if(gb) u.voice = gb;
+    u.rate = 0.85;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ---------------- Azure pronunciation assessment ---------------- */
+function sdkReady(){ return typeof SpeechSDK !== 'undefined'; }
+
+function assess(targetWord){
+  return new Promise(function(resolve, reject){
+    if(!sdkReady()){ reject(new Error('sdk_not_loaded')); return; }
+    if(!config.key){ reject(new Error('no_key')); return; }
+    try{
+      var speechConfig = SpeechSDK.SpeechConfig.fromSubscription(config.key, config.region);
+      speechConfig.speechRecognitionLanguage = 'en-GB';
+      var audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+      var paConfig = new SpeechSDK.PronunciationAssessmentConfig(
+        targetWord,
+        SpeechSDK.PronunciationAssessmentGradingSystem.HundredMark,
+        SpeechSDK.PronunciationAssessmentGranularity.Phoneme,
+        false
+      );
+      var recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+      paConfig.applyTo(recognizer);
+
+      var finished = false;
+      var timeout = setTimeout(function(){
+        if(finished) return;
+        finished = true;
+        try{ recognizer.close(); }catch(e){}
+        reject(new Error('timeout'));
+      }, 9000);
+
+      recognizer.recognizeOnceAsync(function(result){
+        if(finished) return; finished = true; clearTimeout(timeout);
+        try{
+          var jsonStr = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult);
+          var json = JSON.parse(jsonStr);
+          var nbest = json.NBest && json.NBest[0];
+          var accuracy = nbest && nbest.PronunciationAssessment ? nbest.PronunciationAssessment.AccuracyScore : 0;
+          var weakest = null;
+          if(nbest && nbest.Words){
+            nbest.Words.forEach(function(w){
+              (w.Phonemes||[]).forEach(function(p){
+                var sc = p.PronunciationAssessment ? p.PronunciationAssessment.AccuracyScore : 100;
+                if(weakest===null || sc < weakest.score){ weakest = {phoneme:p.Phoneme, score:sc}; }
+              });
+            });
+          }
+          try{ recognizer.close(); }catch(e){}
+          resolve({accuracy: accuracy||0, recognizedText: result.text||'', weakest: weakest});
+        }catch(e){
+          try{ recognizer.close(); }catch(e2){}
+          reject(e);
+        }
+      }, function(err){
+        if(finished) return; finished = true; clearTimeout(timeout);
+        try{ recognizer.close(); }catch(e){}
+        reject(err);
+      });
+    }catch(e){ reject(e); }
+  });
+}
+
+/* ---------------- interaction flow ---------------- */
+var attemptsThisItem = 0;
+var busy = false;
+
+var PRAISE = ['Brilliant!','Well done!','Super sounds!','You got it!','Lovely listening!','Amazing!'];
+var TRY_AGAIN = ['Good try! Let\'s say it again.','Nearly! One more go.','Close! Listen again and try.'];
+
+function pickRandom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function setBusyUI(listening){
+  micBtn.classList.toggle('listening', !!listening);
+  micLabel.textContent = listening ? 'Listening…' : 'Tap the ears to speak';
+}
+
+function handleMicTap(){
+  if(busy) return;
+  if(!config.key){ openSetup(); return; }
+  if(!sdkReady()){
+    feedback.textContent = 'Still loading… try again in a moment.';
+    feedback.className = 'bad';
+    return;
+  }
+  busy = true;
+  micBtn.setAttribute('disabled','');
+  setBusyUI(true);
+  feedback.textContent = '';
+  feedback.className = '';
+
+  var item = currentItem();
+  assess(item.word).then(function(res){
+    busy = false;
+    micBtn.removeAttribute('disabled');
+    setBusyUI(false);
+    onResult(item, res);
+  }).catch(function(err){
+    busy = false;
+    micBtn.removeAttribute('disabled');
+    setBusyUI(false);
+    var msg = 'Hmm, I couldn\'t hear that — try again.';
+    if(err && err.message==='no_key'){ msg = 'Grown-up setup needed first.'; openSetup(); }
+    if(err && (err.message==='timeout')) msg = 'Didn\'t catch that — tap and try again.';
+    feedback.textContent = msg;
+    feedback.className = 'bad';
+  });
+}
+
+function onResult(item, res){
+  attemptsThisItem++;
+  var passedNow = res.accuracy >= PASS_SCORE;
+
+  if(passedNow){
+    progress.passes[item.id] = (progress.passes[item.id]||0) + 1;
+    progress.stars += 1;
+    starCount.textContent = progress.stars;
+    feedback.textContent = '⭐ ' + pickRandom(PRAISE);
+    feedback.className = '';
+    launchConfetti();
+    speak(pickRandom(PRAISE));
+    buildTrail();
+    persist();
+
+    if(progress.passes[item.id] >= NEEDED_PASSES || attemptsThisItem >= MAX_TRIES){
+      showNext();
+    } else {
+      setTimeout(function(){ feedback.textContent=''; }, 1600);
+    }
+  } else {
+    progress.tries[item.id] = (progress.tries[item.id]||0) + 1;
+    persist();
+    if(attemptsThisItem >= MAX_TRIES){
+      feedback.textContent = 'Let\'s come back to this one later!';
+      feedback.className = 'bad';
+      showNext();
+    } else {
+      var hint = pickRandom(TRY_AGAIN);
+      if(res.weakest && res.weakest.score < 50){
+        hint += ' Listen for the "'+res.weakest.phoneme+'" sound.';
+      }
+      feedback.textContent = hint;
+      feedback.className = 'bad';
+      setTimeout(function(){ speakPrompt(); }, 600);
+    }
+  }
+}
+
+function showNext(){
+  nextBtn.classList.add('show');
+}
+
+function goNext(){
+  attemptsThisItem = 0;
+  if(progress.index < ITEMS.length-1) progress.index++;
+  persist();
+  renderCard();
+  setTimeout(speakPrompt, 350);
+}
+
+function launchConfetti(){
+  var colors = ['#2E8B74','#FF6F59','#FFC94A','#5AA9E6'];
+  for(var i=0;i<18;i++){
+    var el = document.createElement('div');
+    el.className='confetti';
+    el.style.left = (Math.random()*100)+'vw';
+    el.style.background = colors[i%colors.length];
+    el.style.animationDuration = (1.4+Math.random()*1.2)+'s';
+    document.body.appendChild(el);
+    (function(e){ setTimeout(function(){ e.remove(); }, 3000); })(el);
+  }
+}
+
+/* ---------------- settings / setup overlays ---------------- */
+var setupOverlay = $('setupOverlay'), statsOverlay = $('statsOverlay');
+
+function openSetup(){
+  $('keyInput').value = config.key||'';
+  $('regionInput').value = config.region||'uksouth';
+  $('setupMsg').textContent = '';
+  $('closeSetupBtn').hidden = !config.key;
+  setupOverlay.hidden = false;
+}
+function closeSetup(){ setupOverlay.hidden = true; micBtn.removeAttribute('disabled'); }
+
+$('saveKeyBtn').addEventListener('click', function(){
+  var k = $('keyInput').value.trim();
+  var r = $('regionInput').value;
+  if(!k){ $('setupMsg').textContent = 'Please paste a key first.'; return; }
+  config = {key:k, region:r};
+  saveJSON(CFG_KEY, config);
+  $('setupMsg').textContent = 'Saved!';
+  setTimeout(closeSetup, 400);
+});
+
+// mirror region list into stats panel select
+(function(){
+  var src = $('regionInput'), dst = $('regionInput2');
+  dst.innerHTML = src.innerHTML;
+})();
+
+$('gear').addEventListener('click', function(){
+  $('statMastered').textContent = Object.keys(progress.passes).filter(function(id){return progress.passes[id]>=NEEDED_PASSES;}).length;
+  $('statStars').textContent = progress.stars;
+  $('keyInput2').value = config.key||'';
+  $('regionInput2').value = config.region||'uksouth';
+  $('statsMsg').textContent='';
+  statsOverlay.hidden = false;
+});
+$('closeStatsBtn').addEventListener('click', function(){ statsOverlay.hidden = true; });
+$('updateKeyBtn').addEventListener('click', function(){
+  var k = $('keyInput2').value.trim();
+  var r = $('regionInput2').value;
+  if(!k){ $('statsMsg').textContent='Please paste a key first.'; return; }
+  config = {key:k, region:r};
+  saveJSON(CFG_KEY, config);
+  $('statsMsg').textContent='Saved!';
+});
+
+var resetArmed = false;
+$('resetBtn').addEventListener('click', function(){
+  if(!resetArmed){
+    resetArmed = true;
+    $('resetBtn').textContent = 'Tap again to confirm';
+    setTimeout(function(){ resetArmed=false; $('resetBtn').textContent='Reset progress'; }, 3000);
+    return;
+  }
+  progress = {passes:{}, tries:{}, stars:0, index:0};
+  persist();
+  resetArmed = false;
+  $('resetBtn').textContent = 'Reset progress';
+  statsOverlay.hidden = true;
+  renderCard();
+});
+
+listenBtn.addEventListener('click', speakPrompt);
+micBtn.addEventListener('click', handleMicTap);
+nextBtn.addEventListener('click', goNext);
+
+/* ---------------- boot ---------------- */
+function boot(){
+  renderCard();
+  if(!config.key){
+    openSetup();
+  } else {
+    micBtn.removeAttribute('disabled');
+  }
+  if('speechSynthesis' in window){
+    window.speechSynthesis.onvoiceschanged = function(){};
+  }
+}
+
+if(document.readyState === 'complete' || document.readyState === 'interactive'){
+  boot();
+}else{
+  document.addEventListener('DOMContentLoaded', boot);
+}
+
+})();
+</script>
