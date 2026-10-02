@@ -348,6 +348,7 @@ hr{border:none;border-top:1px solid var(--line);margin:4px 0;}
       <button class="btn primary" id="updateKeyBtn">Update</button>
     </div>
     <div id="statsMsg" class="small"></div>
+    <div id="debugLine" class="small" style="word-break:break-word;"></div>
     <hr>
     <div class="btnRow">
       <button class="btn danger" id="resetBtn">Reset progress</button>
@@ -524,6 +525,24 @@ function assess(targetWord){
       recognizer.recognizeOnceAsync(function(result){
         if(finished) return; finished = true; clearTimeout(timeout);
         try{
+          if(result.reason === SpeechSDK.ResultReason.Canceled){
+            var cancel = SpeechSDK.CancellationDetails.fromResult(result);
+            try{ recognizer.close(); }catch(e){}
+            var err = new Error('canceled');
+            err.code = 'canceled';
+            err.detail = cancel.reason + ': ' + (cancel.errorDetails||'');
+            reject(err);
+            return;
+          }
+          if(result.reason === SpeechSDK.ResultReason.NoMatch){
+            var nm = SpeechSDK.NoMatchDetails.fromResult(result);
+            try{ recognizer.close(); }catch(e){}
+            var err2 = new Error('nomatch');
+            err2.code = 'nomatch';
+            err2.detail = 'NoMatch: ' + nm.reason;
+            reject(err2);
+            return;
+          }
           var jsonStr = result.properties.getProperty(SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult);
           var json = JSON.parse(jsonStr);
           var nbest = json.NBest && json.NBest[0];
@@ -541,12 +560,17 @@ function assess(targetWord){
           resolve({accuracy: accuracy||0, recognizedText: result.text||'', weakest: weakest});
         }catch(e){
           try{ recognizer.close(); }catch(e2){}
+          e.code = 'parse';
+          e.detail = 'Could not read the result: ' + e.message;
           reject(e);
         }
       }, function(err){
         if(finished) return; finished = true; clearTimeout(timeout);
         try{ recognizer.close(); }catch(e){}
-        reject(err);
+        var wrapped = new Error('sdk_error');
+        wrapped.code = 'sdk_error';
+        wrapped.detail = String(err);
+        reject(wrapped);
       });
     }catch(e){ reject(e); }
   });
@@ -555,6 +579,7 @@ function assess(targetWord){
 /* ---------------- interaction flow ---------------- */
 var attemptsThisItem = 0;
 var busy = false;
+var lastError = null;
 
 var PRAISE = ['Brilliant!','Well done!','Super sounds!','You got it!','Lovely listening!','Amazing!'];
 var TRY_AGAIN = ['Good try! Let\'s say it again.','Nearly! One more go.','Close! Listen again and try.'];
@@ -590,9 +615,22 @@ function handleMicTap(){
     busy = false;
     micBtn.removeAttribute('disabled');
     setBusyUI(false);
+    lastError = err;
     var msg = 'Hmm, I couldn\'t hear that — try again.';
-    if(err && err.message==='no_key'){ msg = 'Grown-up setup needed first.'; openSetup(); }
-    if(err && (err.message==='timeout')) msg = 'Didn\'t catch that — tap and try again.';
+    var code = err && err.code;
+    if(code==='no_key'){ msg = 'Grown-up setup needed first.'; openSetup(); }
+    else if(code==='timeout'){ msg = 'Didn\'t catch that — tap and try again.'; }
+    else if(code==='nomatch'){ msg = 'Didn\'t quite hear any words — try saying it a bit louder.'; }
+    else if(code==='canceled' || code==='sdk_error'){
+      var d = (err.detail||'').toLowerCase();
+      if(d.indexOf('authent')>-1 || d.indexOf('401')>-1 || d.indexOf('403')>-1 || d.indexOf('forbidden')>-1){
+        msg = 'The Azure key or region looks wrong — check Settings ⚙️.';
+      } else if(d.indexOf('connect')>-1 || d.indexOf('network')>-1 || d.indexOf('websocket')>-1){
+        msg = 'Connection trouble reaching Azure — check your internet and the region in Settings ⚙️.';
+      } else {
+        msg = 'Something went wrong talking to Azure — see Settings ⚙️ for details.';
+      }
+    }
     feedback.textContent = msg;
     feedback.className = 'bad';
   });
@@ -696,6 +734,7 @@ $('gear').addEventListener('click', function(){
   $('keyInput2').value = config.key||'';
   $('regionInput2').value = config.region||'uksouth';
   $('statsMsg').textContent='';
+  $('debugLine').textContent = lastError ? ('Last error: '+(lastError.detail||lastError.message||lastError)) : '';
   statsOverlay.hidden = false;
 });
 $('closeStatsBtn').addEventListener('click', function(){ statsOverlay.hidden = true; });
