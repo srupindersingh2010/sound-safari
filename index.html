@@ -155,6 +155,14 @@ h1,h2,.display{font-family:'Baloo 2',system-ui,sans-serif;}
   gap:8px;
 }
 #feedback.bad{color:var(--coral);}
+#errorDetail{
+  max-width:320px;
+  text-align:center;
+  font-size:12px;
+  color:var(--mute);
+  word-break:break-word;
+  margin-top:-6px;
+}
 
 #micWrap{display:flex;flex-direction:column;align-items:center;gap:10px;}
 #micBtn{
@@ -279,6 +287,7 @@ hr{border:none;border-top:1px solid var(--line);margin:4px 0;}
   </div>
 
   <div id="feedback"></div>
+  <div id="errorDetail"></div>
 
   <div id="micWrap">
     <button id="micBtn" disabled>🎤</button>
@@ -438,7 +447,9 @@ var $ = function(id){ return document.getElementById(id); };
 var trail = $('trail'), starCount = $('starCount'), kindTag = $('kindTag'),
     emojiEl = $('emoji'), targetText = $('targetText'), subWord = $('subWord'),
     listenBtn = $('listenBtn'), micBtn = $('micBtn'), micLabel = $('micLabel'),
-    feedback = $('feedback'), nextBtn = $('nextBtn');
+    feedback = $('feedback'), nextBtn = $('nextBtn'), errorDetail = $('errorDetail');
+
+var LAST_ERR_KEY = 'soundSafariLastError_v1';
 
 function buildTrail(){
   trail.innerHTML='';
@@ -467,6 +478,7 @@ function renderCard(){
   starCount.textContent = progress.stars;
   feedback.textContent = '';
   feedback.className = '';
+  errorDetail.textContent = '';
   nextBtn.classList.remove('show');
   buildTrail();
   // scroll current dot into view
@@ -604,6 +616,7 @@ function handleMicTap(){
   setBusyUI(true);
   feedback.textContent = '';
   feedback.className = '';
+  errorDetail.textContent = '';
 
   var item = currentItem();
   assess(item.word).then(function(res){
@@ -616,6 +629,7 @@ function handleMicTap(){
     micBtn.removeAttribute('disabled');
     setBusyUI(false);
     lastError = err;
+    try{ saveJSON(LAST_ERR_KEY, {detail: err && (err.detail||err.message||String(err)), when: new Date().toISOString()}); }catch(e){}
     var msg = 'Hmm, I couldn\'t hear that — try again.';
     var code = err && err.code;
     if(code==='no_key'){ msg = 'Grown-up setup needed first.'; openSetup(); }
@@ -624,15 +638,16 @@ function handleMicTap(){
     else if(code==='canceled' || code==='sdk_error'){
       var d = (err.detail||'').toLowerCase();
       if(d.indexOf('authent')>-1 || d.indexOf('401')>-1 || d.indexOf('403')>-1 || d.indexOf('forbidden')>-1){
-        msg = 'The Azure key or region looks wrong — check Settings ⚙️.';
+        msg = 'The Azure key or region looks wrong.';
       } else if(d.indexOf('connect')>-1 || d.indexOf('network')>-1 || d.indexOf('websocket')>-1){
-        msg = 'Connection trouble reaching Azure — check your internet and the region in Settings ⚙️.';
+        msg = 'Connection trouble reaching Azure.';
       } else {
-        msg = 'Something went wrong talking to Azure — see Settings ⚙️ for details.';
+        msg = 'Something went wrong talking to Azure.';
       }
     }
     feedback.textContent = msg;
     feedback.className = 'bad';
+    errorDetail.textContent = (err && (err.detail||err.message)) ? ('Details: ' + (err.detail||err.message)) : '';
   });
 }
 
@@ -734,7 +749,10 @@ $('gear').addEventListener('click', function(){
   $('keyInput2').value = config.key||'';
   $('regionInput2').value = config.region||'uksouth';
   $('statsMsg').textContent='';
-  $('debugLine').textContent = lastError ? ('Last error: '+(lastError.detail||lastError.message||lastError)) : '';
+  var stored = loadJSON(LAST_ERR_KEY, null);
+  var line = lastError ? ('Last error: '+(lastError.detail||lastError.message||lastError))
+           : (stored ? ('Last error ('+stored.when+'): '+stored.detail) : '');
+  $('debugLine').textContent = line;
   statsOverlay.hidden = false;
 });
 $('closeStatsBtn').addEventListener('click', function(){ statsOverlay.hidden = true; });
